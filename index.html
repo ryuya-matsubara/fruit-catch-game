@@ -314,15 +314,17 @@
         }
 
         container.addEventListener('touchstart', (e) => {
+            if (!game.running) {
+                return; // ボタンのタッチイベントをブロックしない
+            }
             e.preventDefault();
-            if (!game.running) return;
             isDragging = true;
             game.basket.x = getEventX(e);
         }, { passive: false });
 
         container.addEventListener('touchmove', (e) => {
-            e.preventDefault();
             if (!game.running || !isDragging) return;
+            e.preventDefault();
             game.basket.x = getEventX(e);
             // Clamp basket position
             game.basket.x = Math.max(CONFIG.BASKET_WIDTH / 2, Math.min(canvas.width - CONFIG.BASKET_WIDTH / 2, game.basket.x));
@@ -611,8 +613,10 @@
         document.getElementById('start-btn').addEventListener('click', startGame);
         document.getElementById('restart-btn').addEventListener('click', startGame);
 
-        // Prevent default touch behaviors
-        document.addEventListener('touchmove', (e) => e.preventDefault(), { passive: false });
+        // Prevent default touch behaviors only during game
+        document.addEventListener('touchmove', (e) => {
+            if (game.running) e.preventDefault();
+        }, { passive: false });
 
         // Initialize
         updateUI();
