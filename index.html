@@ -65,35 +65,6 @@
             box-shadow: 0 3px 10px rgba(0,0,0,0.1);
         }
 
-        .lives-display {
-            background: rgba(255, 255, 255, 0.9);
-            border-radius: 25px;
-            padding: 8px 18px;
-            font-size: 18px;
-            box-shadow: 0 3px 10px rgba(0,0,0,0.1);
-        }
-
-        .combo-display {
-            position: absolute;
-            top: 60px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: linear-gradient(135deg, #FF6B6B, #FF8E53);
-            border-radius: 25px;
-            padding: 6px 16px;
-            font-size: 16px;
-            font-weight: bold;
-            color: white;
-            box-shadow: 0 3px 10px rgba(255,107,107,0.3);
-            opacity: 0;
-            transition: opacity 0.3s;
-            z-index: 10;
-        }
-
-        .combo-display.visible {
-            opacity: 1;
-        }
-
         #canvas {
             position: absolute;
             top: 0;
@@ -215,9 +186,7 @@
         <!-- UI -->
         <div id="ui-overlay">
             <div class="score-display" id="score-display">Score: 0</div>
-            <div class="lives-display" id="lives-display"></div>
         </div>
-        <div class="combo-display" id="combo-display">COMBO x2!</div>
 
         <!-- Start Screen -->
         <div class="screen-overlay visible" id="start-screen">
@@ -243,11 +212,10 @@
             BASKET_WIDTH: 80,
             BASKET_HEIGHT: 50,
             FRUIT_SIZE: 40,
-            INITIAL_SPEED: 2.5,
-            SPEED_INCREMENT: 0.15,
-            SPAWN_INTERVAL_INITIAL: 1200,
-            SPAWN_INTERVAL_MIN: 500,
-            MAX_LIVES: 3,
+            INITIAL_SPEED: 4,
+            SPEED_INCREMENT: 0.25,
+            SPAWN_INTERVAL_INITIAL: 750,
+            SPAWN_INTERVAL_MIN: 350,
             LEVEL_UP_SCORE: 10,
         };
 
@@ -256,14 +224,13 @@
             { emoji: '🍎', points: 1, color: '#FF4444' },
             { emoji: '🍊', points: 1, color: '#FF8C00' },
             { emoji: '🍋', points: 1, color: '#FFD700' },
-            { emoji: '🍇', points: 2, color: '#8B008B' },
-            { emoji: '🍓', points: 2, color: '#FF1493' },
-            { emoji: '🍑', points: 2, color: '#FFDAB9' },
-            { emoji: '🌟', points: 5, color: '#FFD700' },
+            { emoji: '🍇', points: 1, color: '#8B008B' },
+            { emoji: '🍓', points: 1, color: '#FF1493' },
+            { emoji: '🍑', points: 1, color: '#FFDAB9' },
         ];
 
         const BAD_ITEMS = [
-            { emoji: '💣', points: -3, color: '#333' },
+            { emoji: '💣', color: '#333' },
         ];
 
         // Game State
@@ -271,9 +238,7 @@
             running: false,
             score: 0,
             highScore: parseInt(localStorage.getItem('fruitCatchHighScore') || '0'),
-            lives: CONFIG.MAX_LIVES,
             level: 1,
-            combo: 0,
             basket: { x: 0, y: 0 },
             fruits: [],
             particles: [],
@@ -299,8 +264,6 @@
 
         // DOM elements
         const scoreDisplay = document.getElementById('score-display');
-        const livesDisplay = document.getElementById('lives-display');
-        const comboDisplay = document.getElementById('combo-display');
         const startScreen = document.getElementById('start-screen');
         const gameoverScreen = document.getElementById('gameover-screen');
         const finalScore = document.getElementById('final-score');
@@ -357,20 +320,11 @@
 
         // Spawn fruit
         function spawnFruit() {
-            const isBad = Math.random() < 0.15 && game.level > 2;
-            const itemPool = isBad ? BAD_ITEMS : FRUITS;
+            const isBad = Math.random() < 0.2;
             let item;
 
             if (!isBad) {
-                // Higher point fruits appear less frequently
-                const rand = Math.random();
-                if (rand < 0.05 && game.level > 3) {
-                    item = FRUITS[6]; // Star
-                } else if (rand < 0.3) {
-                    item = FRUITS[Math.floor(Math.random() * 3) + 3]; // 2-point fruits
-                } else {
-                    item = FRUITS[Math.floor(Math.random() * 3)]; // 1-point fruits
-                }
+                item = FRUITS[Math.floor(Math.random() * FRUITS.length)];
             } else {
                 item = BAD_ITEMS[0];
             }
@@ -450,27 +404,16 @@
                 if (Math.abs(dx) < CONFIG.BASKET_WIDTH / 2 + 10 && Math.abs(dy) < CONFIG.BASKET_HEIGHT / 2 + 10) {
                     // Caught!
                     if (fruit.isBad) {
-                        game.combo = 0;
-                        game.score = Math.max(0, game.score + fruit.points);
                         createParticles(fruit.x, fruit.y, '#333', 12);
-                        showScorePopup(fruit.x, fruit.y, fruit.points);
-                        // Vibrate if supported
-                        if (navigator.vibrate) navigator.vibrate(100);
-                    } else {
-                        game.combo++;
-                        const comboMultiplier = Math.min(game.combo, 5);
-                        const points = fruit.points * comboMultiplier;
-                        game.score += points;
-                        createParticles(fruit.x, fruit.y, fruit.color, 10);
-                        showScorePopup(fruit.x, fruit.y, points);
-
-                        if (game.combo >= 2) {
-                            comboDisplay.textContent = `COMBO x${game.combo}!`;
-                            comboDisplay.classList.add('visible');
-                            setTimeout(() => comboDisplay.classList.remove('visible'), 1000);
-                        }
+                        if (navigator.vibrate) navigator.vibrate(200);
+                        game.fruits.splice(i, 1);
+                        gameOver();
+                        return;
                     }
 
+                    game.score++;
+                    createParticles(fruit.x, fruit.y, fruit.color, 10);
+                    showScorePopup(fruit.x, fruit.y, 1);
                     game.fruits.splice(i, 1);
                     updateUI();
 
@@ -487,15 +430,10 @@
                 // Missed
                 if (fruit.y > canvas.height + CONFIG.FRUIT_SIZE) {
                     if (!fruit.isBad) {
-                        game.lives--;
-                        game.combo = 0;
                         if (navigator.vibrate) navigator.vibrate(200);
-                        updateUI();
-
-                        if (game.lives <= 0) {
-                            gameOver();
-                            return;
-                        }
+                        game.fruits.splice(i, 1);
+                        gameOver();
+                        return;
                     }
                     game.fruits.splice(i, 1);
                 }
@@ -560,11 +498,6 @@
         // Update UI
         function updateUI() {
             scoreDisplay.textContent = `Score: ${game.score}`;
-            let hearts = '';
-            for (let i = 0; i < CONFIG.MAX_LIVES; i++) {
-                hearts += i < game.lives ? '❤️' : '🖤';
-            }
-            livesDisplay.textContent = hearts;
         }
 
         // Game loop
@@ -583,9 +516,7 @@
         function startGame() {
             game.running = true;
             game.score = 0;
-            game.lives = CONFIG.MAX_LIVES;
             game.level = 1;
-            game.combo = 0;
             game.fruits = [];
             game.particles = [];
             game.spawnTimer = 0;
